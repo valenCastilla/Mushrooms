@@ -1,0 +1,466 @@
+#Code 
+
+# ---------- ========== ---------- ========== ---------- IMPORTAMOS LAS GALERIAS  ---------- ========== ---------- ========== ----------
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from google.colab import drive
+from tabulate import tabulate
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix, precision_score, recall_score, f1_score, roc_curve, auc, recall_score, precision_recall_curve
+from sklearn.preprocessing import LabelEncoder
+from sklearn.datasets import load_iris
+from sklearn.tree import plot_tree
+
+
+#IMPORTACIÓN DEL DATASET
+
+data_original = pd.read_csv('/content/drive/MyDrive/IAA/secondary_data.csv', sep=';')
+data = data_original.copy()
+data.info()
+data
+
+#  ---------- ========== ---------- ========== ---------- EXPLORACIÓN  ---------- ========== ---------- ========== ----------
+
+def mostrar_data_actual(data):
+  print('Cantidad de instancias:', data.shape[0],  end='\n\n')
+  print('Cantidad de columnas:',data.shape[1],  end='\n\n' )
+  print(data.info(), end='\n\n')
+
+data_check_1 = data.copy()
+mostrar_data_actual(data_check_1)
+
+
+
+# Exploramos cada una de las columnas no numericas, vemos la cantidad de hongos venenosos y no venenosos.
+
+resumen = []
+
+columnas_no_numericas = data.select_dtypes(exclude=[np.number]).columns
+
+for column in columnas_no_numericas:
+    grupos = data.groupby(column)
+
+    clases = []
+    cant_instancias = []
+    cant_p = []
+    cant_e = []
+
+    for valor, data_agrupada in grupos:
+        clases.append(valor)
+        cant_instancias.append(len(data_agrupada))
+        cant_p.append((data_agrupada['class'] == 'p').sum())
+        cant_e.append((data_agrupada['class'] == 'e').sum())
+
+    res = pd.DataFrame({
+        'Clase': clases,
+        'Cantidad de Instancias': cant_instancias,
+        'Cantidad de "p"': cant_p,
+        'Cantidad de "e"': cant_e
+    })
+
+    resumen.append((column, res))
+
+for column, res in resumen:
+    print(f"En {column} hay {data[column].nunique()} variables. Estas variables son:")
+    print(tabulate(res, headers='keys', tablefmt='grid'))
+    print("\n")
+
+data.describe()
+
+# Armamos un dataset solamente con las columnas numericas
+data_numerica = data.select_dtypes(include=[np.number])
+
+
+# HACEMOS HISTOGRAMA DE LAS VARIABLES NUMÉRICAS
+
+for feature in data_numerica.columns:
+    plt.figure(figsize=(8, 6))
+    plt.hist(data[feature], bins=60, edgecolor='k', alpha=0.7)
+
+    plt.title(f"Histograma de {feature}")
+    plt.xlabel(feature)
+    plt.ylabel('Frecuencia')
+
+    plt.show()
+
+
+# HACEMOS HISTOGRAMA 2 DE LAS VARIABLES NUMÉRICAS incluyendo la separación por ´class´
+
+for columna in data_numerica.columns:
+    plt.figure(figsize=(10, 5))
+    plt.hist(data[data['class'] == "p"][columna], bins=30, alpha=0.5, color='blue', label='class= venenosa')
+    plt.hist(data[data['class'] == "e"][columna], bins=30, alpha=0.5, color='green', label='class= comestible')
+    plt.legend()
+    plt.xlabel(columna)
+    plt.ylabel("Frecuencia")
+    plt.title(f'Histograma de {columna}')
+    plt.xlabel(columna)
+    plt.ylabel('Frecuencia')
+    plt.legend()
+    plt.show() 
+
+
+# Hacemos un boxplot para ver la distribución y los outliers
+
+plt.figure(figsize=(8, 6))
+
+plt.boxplot([data[feature] for feature in data_numerica.columns], labels= data_numerica.columns)
+
+plt.title("Boxplots de features numericas")
+plt.xlabel("Feature")
+plt.ylabel("Valor")
+plt.grid(True)
+
+plt.show() 
+
+
+# Analizamos la cantidad de valores iguales a 0 en las variables numericas
+
+for columna in data_numerica.columns:
+    total_count = len(data)
+    zero_count = (data[columna] == 0).sum()
+    zero_percentage = (zero_count / total_count) * 100
+
+    print(f"El porcentaje de instancias con valor 0 en '{columna}' es: {zero_percentage:.2f}%") 
+
+
+
+
+# ---------- ========== ---------- ========== ---------- LIMPIEZA ---------- ========== ---------- ========== ----------
+
+
+#decidimos que si la columna tiene menos del 95% de instancias con valores vamos a descartar la columna
+columnas_eliminadas_por_muchos_faltantes = []
+for column in data.columns:
+  if data[column].count() < data.shape[0] * 0.95:
+    data = data.drop(column, axis=1)
+    columnas_eliminadas_por_muchos_faltantes.append(column)
+mostrar_data_actual(data)
+
+
+#COLUMNAS QUE NO TIENEN VALORES NA
+columnas_sin_NaN = []
+for column in data.columns:
+  if data[column].dtype == 'object':
+    if data[column].count() == data.shape[0]:
+      columnas_sin_NaN.append(column)
+print(columnas_sin_NaN)
+
+
+#COLUMNAS EN LAS QUE DEBEMOS APLICAR DUMMIES Y EN LAS QUE DEBEMOS APLICAR ONE-HOT
+
+columnas_dummy = []
+columnas_one_hot = []
+for column in columnas_sin_NaN:
+  if data.groupby(column).ngroups < 3 :
+    columnas_dummy.append(column)
+  else:
+    columnas_one_hot.append(column)
+print(columnas_dummy)
+print(columnas_one_hot)
+
+
+# APLICAMOS DUMMY A CLASS --> TARGET
+data["class"] = data["class"].replace({'p': 1, 'e': 0})
+
+# APLICAMOS DUMMY A 'does-bruise-or-bleed'
+data["does-bruise-or-bleed"].unique()
+data["does-bruise-or-bleed"] = data["does-bruise-or-bleed"].replace({"t": 1, "f":0})
+
+# APLICAMOS DUMMY A has-ring
+data["has-ring"].unique()
+data["has-ring"] = data["has-ring"].replace({"t": 1, "f":0})
+
+# APLICAMOS ONE-HOT A SEASON
+#season -> la consideramos ordinal invierno < primavera < verano < otoño
+data["season"].unique()
+data["season"] = data["season"].replace({"w": 1, "s":2, "u":3, "a":4})
+columnas_one_hot.remove("season")
+
+
+columnas_con_NaN = []
+for column in data.columns:
+  if data[column].dtype == 'object':
+    if data[column].count() != data.shape[0]:
+      columnas_con_NaN.append(column)
+print(columnas_con_NaN)
+
+
+#ELIMINO AQUELLAS FILAS QUE TIENEN VALORES NA
+for columna in columnas_con_NaN:
+    data = data.dropna(subset=[columna])
+
+
+for columna in columnas_con_NaN:
+  if len(data[columna].unique()) > 2:
+    columnas_one_hot.append(columna)
+
+
+# ELIMINO AQUELLAS FILAS DONDE EN LAS VARIABLES NUMÉRICAS TENGAN 0
+columnas_numéricas = ['cap-diameter', 'stem-height','stem-width']
+for columna in columnas_numéricas:
+    data = data[data[columna] != 0.0]
+
+
+data_trabajado = data.select_dtypes(exclude=['object'])
+mostrar_data_actual(data_trabajado)
+
+
+data_one_hot = pd.get_dummies(data)
+mostrar_data_actual(data_one_hot)
+
+
+print(columnas_one_hot)
+
+for columna in columnas_one_hot:
+  data_filtrado = data.copy().loc[:,[columna,"class"]]
+  dummie = pd.get_dummies(data_filtrado, columns=[columna])
+  matriz_correlacion = dummie.corr()
+
+
+  plt.figure(figsize=(10, 8))
+  sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+  plt.title(f'Mapa de calor de correlación - {columna}')
+  plt.show()
+
+
+for feature in columnas_one_hot:
+    sns.countplot(x=feature, hue='class', data=data)
+    plt.title(f'Frecuencia de {feature} por clase')
+    plt.xlabel(feature)
+    plt.ylabel('Frecuencia')
+    plt.show()
+
+
+matriz_correlacion = data_one_hot.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+plt.title('Mapa de calor de correlación')
+plt.show()
+
+
+matriz_correlacion = data_cleaned.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+plt.title(f'Mapa de calor de correlación')
+plt.show()
+
+# ---------- ========== ---------- ========== ---------- GRAFICOS ---------- ========== ---------- ========== ----------
+
+# Grafico entre altura del tallo Y Diámetro del gorro
+le = LabelEncoder()
+class_encoded = le.fit_transform(data["class"])
+fig, ax = plt.subplots()
+scatter = ax.scatter(data["stem-height"], data["cap-diameter"], c=class_encoded, s=3, alpha=0.5, cmap="bwr")
+legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+ax.add_artist(legend1)
+plt.title("Relación entre Altura del Tallo (mm) y el Diametro del Gorro (cm)")
+plt.xlabel("Altura del Tallo (mm)")
+plt.ylabel("Diametro del Gorro (cm)")
+ax.fill_betweenx(y=[0, 30], x1=0, x2=20, color='grey', alpha=0.3)
+plt.show()
+
+
+# Grafico entre ANCHO del tallo Y Diámetro del gorro
+le = LabelEncoder()
+class_encoded = le.fit_transform(data["class"])
+fig, ax = plt.subplots()
+scatter = ax.scatter(data["stem-width"], data["cap-diameter"], c=class_encoded, s=3, alpha=0.5, cmap="bwr")
+legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+ax.add_artist(legend1)
+plt.title("Relación entre Ancho del Tallo (mm) y el Diametro del Gorro (cm)")
+plt.xlabel("Ancho del Tallo (mm)")
+plt.ylabel("Diametro del Gorro (cm)")
+ax.fill_betweenx(y=[0, 30], x1=0, x2=60, color='grey', alpha=0.3)
+plt.show()
+
+# Grafico entre ANCHO Y ALTURA del tallo
+le = LabelEncoder()
+class_encoded = le.fit_transform(data["class"])
+fig, ax = plt.subplots()
+scatter = ax.scatter(data["stem-width"], data["stem-height"], c=class_encoded, s=3, alpha=0.5, cmap="bwr")
+legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+ax.add_artist(legend1)
+plt.title("Relación entre Ancho del Tallo (mm) y Altura del Tallo (mm)")
+plt.xlabel("Ancho del Tallo (mm)")
+plt.ylabel("Altura del Gorro (mm)")
+ax.fill_betweenx(y=[0, 20], x1=0, x2=60, color='grey', alpha=0.3)
+plt.show()
+
+
+
+#---------- ========== ---------- ========== ----------  MODELO ---------- ========== ---------- ========== ----------
+
+
+# FUNCIÓN DE EVALUACIÓN DE MODELOS
+def evaluación(y_test, y_pred):
+  cm = confusion_matrix(y_test, y_pred)
+  print("----- Matriz de Confusión -----", end='\n\n')
+  print(f'                | {"Pred. Positiva":^15} | {"Pred. Negativa":^15} |')
+  print(f'{"Real Positiva":^15} | {cm[0, 0]:^15} | {cm[0, 1]:^15} |')
+  print(f'{"Real Negativa":^15} | {cm[1, 0]:^15} | {cm[1, 1]:^15} |')
+  precision = precision_score(y_test, y_pred)
+  recall = recall_score(y_test, y_pred)
+  f1 = f1_score(y_test, y_pred)
+  print("\n----- Métricas de Evaluación -----", end='\n\n')
+  print(f"Precisión: {precision}")
+  print(f"Recall: {recall}")
+  print(f"F1-score: {f1}")
+  report = classification_report(y_test, y_pred)
+  print("\n----- Informe de Clasificación -----", end='\n\n')
+  print(report)
+
+
+X_num = data_trabajado.drop(["class"], axis = 1)
+y_num = data_trabajado['class']
+X_train, X_test, y_train, y_test = train_test_split(X_num, y_num , test_size=0.3, random_state=42)
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_trabajado.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+
+X = data_one_hot.drop(['class'], axis=1)
+y = data_one_hot['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.3, random_state=42)
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_one_hot.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+data_imp = ['stem-color']
+data_mix = data[data_imp]
+data_final_base = pd.concat([data_trabajado, data_mix] , axis=1)
+data_final = pd.get_dummies(data_final_base)
+mostrar_data_actual(data_final)
+
+
+
+X = data_final.drop(['class'], axis=1)
+y = data_final['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.3)
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_final.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+
+X = data_final.drop(['class'], axis=1)
+y = data_final['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+param_grid = {
+    'n_estimators': [50, 100, 150],  # Default = 100
+    'max_depth': [3, 5, None],      # default = None
+    'min_samples_leaf': [1, 3],        # Default = 1
+    'min_samples_split': [2, 5]       # Default = 2
+}
+grid_search = GridSearchCV(estimator=RandomForestClassifier(random_state=42),
+                           param_grid=param_grid,
+                           cv=5,
+                           verbose=2,
+                           n_jobs=-1)
+grid_search.fit(X_train, y_train)
+print("Mejores hiperparámetros encontrados:", grid_search.best_params_)
+best_model = grid_search.best_estimator_
+print("\nParámetros del mejor modelo:\n", best_model.get_params())
+y_pred = best_model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("\nPrecisión en el conjunto de prueba:", accuracy)
+print("\nReporte de clasificación:\n", classification_report(y_test, y_pred))
+importances = best_model.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+
+
+
+#CURVA-ROC
+fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+roc_auc = auc(fpr, tpr)
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, color='blue', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('Tasa de Falsos Positivos')
+plt.ylabel('Tasa de Verdaderos Positivos')
+plt.title('Curva ROC')
+plt.legend(loc="lower right")
+plt.show()
+
+
+precision, recall, _ = precision_recall_curve(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+plt.plot(recall, precision, color='blue', lw=2)
+plt.xlabel('Exhaustividad')
+plt.ylabel('Precisión')
+plt.title('Curva Precision-Recall')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.grid(True)
+plt.show()
+
+
+
+X = data_final.drop(['class'], axis=1)
+y = data_final['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.3)
+clf = RandomForestClassifier(n_estimators = 100, max_depth = None, min_samples_leaf = 1, min_samples_split = 5)
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_final.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+
+df_pred = pd.DataFrame({'Real': y_test, 'Predicho': y_pred})
+count_classes = df_pred.groupby(['Real', 'Predicho']).size().unstack(fill_value=0)
+count_classes.plot(kind='bar', figsize=(10, 6))
+plt.title('Comparación de Predicciones Reales vs Predichas')
+plt.xlabel('Clase Verdadera')
+plt.ylabel('Número de Instancias')
+plt.xticks(rotation=0)
+plt.legend(title='Predicho', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.show()
