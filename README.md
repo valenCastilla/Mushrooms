@@ -37,4 +37,5 @@ Fecha de Entrega:
 
 Materia: 
   - Introducción al Aprendizaje Automatizado
+  - Carrera: Licenciatura en Ciencia de Datos (UNSAM)
 
