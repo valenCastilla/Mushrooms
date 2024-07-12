@@ -1,0 +1,41 @@
+# ---------- ========== ---------- ========== ---------- GRAFICOS ---------- ========== ---------- ========== ----------
+
+# Grafico entre altura del tallo Y Diámetro del gorro
+le = LabelEncoder()
+class_encoded = le.fit_transform(data["class"])
+fig, ax = plt.subplots()
+scatter = ax.scatter(data["stem-height"], data["cap-diameter"], c=class_encoded, s=3, alpha=0.5, cmap="bwr")
+legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+ax.add_artist(legend1)
+plt.title("Relación entre Altura del Tallo (mm) y el Diametro del Gorro (cm)")
+plt.xlabel("Altura del Tallo (mm)")
+plt.ylabel("Diametro del Gorro (cm)")
+ax.fill_betweenx(y=[0, 30], x1=0, x2=20, color='grey', alpha=0.3)
+plt.show()
+
+
+# Grafico entre ANCHO del tallo Y Diámetro del gorro
+le = LabelEncoder()
+class_encoded = le.fit_transform(data["class"])
+fig, ax = plt.subplots()
+scatter = ax.scatter(data["stem-width"], data["cap-diameter"], c=class_encoded, s=3, alpha=0.5, cmap="bwr")
+legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+ax.add_artist(legend1)
+plt.title("Relación entre Ancho del Tallo (mm) y el Diametro del Gorro (cm)")
+plt.xlabel("Ancho del Tallo (mm)")
+plt.ylabel("Diametro del Gorro (cm)")
+ax.fill_betweenx(y=[0, 30], x1=0, x2=60, color='grey', alpha=0.3)
+plt.show()
+
+# Grafico entre ANCHO Y ALTURA del tallo
+le = LabelEncoder()
+class_encoded = le.fit_transform(data["class"])
+fig, ax = plt.subplots()
+scatter = ax.scatter(data["stem-width"], data["stem-height"], c=class_encoded, s=3, alpha=0.5, cmap="bwr")
+legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Classes")
+ax.add_artist(legend1)
+plt.title("Relación entre Ancho del Tallo (mm) y Altura del Tallo (mm)")
+plt.xlabel("Ancho del Tallo (mm)")
+plt.ylabel("Altura del Gorro (mm)")
+ax.fill_betweenx(y=[0, 20], x1=0, x2=60, color='grey', alpha=0.3)
+plt.show()
