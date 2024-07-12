@@ -1,0 +1,6 @@
+#IMPORTACIÓN DEL DATASET
+
+data_original = pd.read_csv('/content/drive/MyDrive/IAA/secondary_data.csv', sep=';')
+data = data_original.copy()
+data.info()
+data
