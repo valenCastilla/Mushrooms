@@ -1,0 +1,233 @@
+#IMPORTACIÓN DEL DATASET
+
+data_original = pd.read_csv('/content/drive/MyDrive/IAA/secondary_data.csv', sep=';')
+data = data_original.copy()
+data.info()
+data
+
+
+  #  ---------- ========== ---------- ========== ---------- EXPLORACIÓN  ---------- ========== ---------- ========== ----------
+
+def mostrar_data_actual(data):
+  print('Cantidad de instancias:', data.shape[0],  end='\n\n')
+  print('Cantidad de columnas:',data.shape[1],  end='\n\n' )
+  print(data.info(), end='\n\n')
+
+data_check_1 = data.copy()
+mostrar_data_actual(data_check_1)
+
+
+
+# Exploramos cada una de las columnas no numericas, vemos la cantidad de hongos venenosos y no venenosos.
+
+resumen = []
+
+columnas_no_numericas = data.select_dtypes(exclude=[np.number]).columns
+
+for column in columnas_no_numericas:
+    grupos = data.groupby(column)
+
+    clases = []
+    cant_instancias = []
+    cant_p = []
+    cant_e = []
+
+    for valor, data_agrupada in grupos:
+        clases.append(valor)
+        cant_instancias.append(len(data_agrupada))
+        cant_p.append((data_agrupada['class'] == 'p').sum())
+        cant_e.append((data_agrupada['class'] == 'e').sum())
+
+    res = pd.DataFrame({
+        'Clase': clases,
+        'Cantidad de Instancias': cant_instancias,
+        'Cantidad de "p"': cant_p,
+        'Cantidad de "e"': cant_e
+    })
+
+    resumen.append((column, res))
+
+for column, res in resumen:
+    print(f"En {column} hay {data[column].nunique()} variables. Estas variables son:")
+    print(tabulate(res, headers='keys', tablefmt='grid'))
+    print("\n")
+
+data.describe()
+
+# Armamos un dataset solamente con las columnas numericas
+data_numerica = data.select_dtypes(include=[np.number])
+
+
+# HACEMOS HISTOGRAMA DE LAS VARIABLES NUMÉRICAS
+
+for feature in data_numerica.columns:
+    plt.figure(figsize=(8, 6))
+    plt.hist(data[feature], bins=60, edgecolor='k', alpha=0.7)
+
+    plt.title(f"Histograma de {feature}")
+    plt.xlabel(feature)
+    plt.ylabel('Frecuencia')
+
+    plt.show()
+
+
+# HACEMOS HISTOGRAMA 2 DE LAS VARIABLES NUMÉRICAS incluyendo la separación por ´class´
+
+for columna in data_numerica.columns:
+    plt.figure(figsize=(10, 5))
+    plt.hist(data[data['class'] == "p"][columna], bins=30, alpha=0.5, color='blue', label='class= venenosa')
+    plt.hist(data[data['class'] == "e"][columna], bins=30, alpha=0.5, color='green', label='class= comestible')
+    plt.legend()
+    plt.xlabel(columna)
+    plt.ylabel("Frecuencia")
+    plt.title(f'Histograma de {columna}')
+    plt.xlabel(columna)
+    plt.ylabel('Frecuencia')
+    plt.legend()
+    plt.show() 
+
+
+# Hacemos un boxplot para ver la distribución y los outliers
+
+plt.figure(figsize=(8, 6))
+
+plt.boxplot([data[feature] for feature in data_numerica.columns], labels= data_numerica.columns)
+
+plt.title("Boxplots de features numericas")
+plt.xlabel("Feature")
+plt.ylabel("Valor")
+plt.grid(True)
+
+plt.show() 
+
+
+# Analizamos la cantidad de valores iguales a 0 en las variables numericas
+
+for columna in data_numerica.columns:
+    total_count = len(data)
+    zero_count = (data[columna] == 0).sum()
+    zero_percentage = (zero_count / total_count) * 100
+
+    print(f"El porcentaje de instancias con valor 0 en '{columna}' es: {zero_percentage:.2f}%") 
+
+
+
+
+# ---------- ========== ---------- ========== ---------- LIMPIEZA ---------- ========== ---------- ========== ----------
+
+
+#decidimos que si la columna tiene menos del 95% de instancias con valores vamos a descartar la columna
+columnas_eliminadas_por_muchos_faltantes = []
+for column in data.columns:
+  if data[column].count() < data.shape[0] * 0.95:
+    data = data.drop(column, axis=1)
+    columnas_eliminadas_por_muchos_faltantes.append(column)
+mostrar_data_actual(data)
+
+
+#COLUMNAS QUE NO TIENEN VALORES NA
+columnas_sin_NaN = []
+for column in data.columns:
+  if data[column].dtype == 'object':
+    if data[column].count() == data.shape[0]:
+      columnas_sin_NaN.append(column)
+print(columnas_sin_NaN)
+
+
+#COLUMNAS EN LAS QUE DEBEMOS APLICAR DUMMIES Y EN LAS QUE DEBEMOS APLICAR ONE-HOT
+
+columnas_dummy = []
+columnas_one_hot = []
+for column in columnas_sin_NaN:
+  if data.groupby(column).ngroups < 3 :
+    columnas_dummy.append(column)
+  else:
+    columnas_one_hot.append(column)
+print(columnas_dummy)
+print(columnas_one_hot)
+
+
+# APLICAMOS DUMMY A CLASS --> TARGET
+data["class"] = data["class"].replace({'p': 1, 'e': 0})
+
+# APLICAMOS DUMMY A 'does-bruise-or-bleed'
+data["does-bruise-or-bleed"].unique()
+data["does-bruise-or-bleed"] = data["does-bruise-or-bleed"].replace({"t": 1, "f":0})
+
+# APLICAMOS DUMMY A has-ring
+data["has-ring"].unique()
+data["has-ring"] = data["has-ring"].replace({"t": 1, "f":0})
+
+# APLICAMOS ONE-HOT A SEASON
+#season -> la consideramos ordinal invierno < primavera < verano < otoño
+data["season"].unique()
+data["season"] = data["season"].replace({"w": 1, "s":2, "u":3, "a":4})
+columnas_one_hot.remove("season")
+
+
+columnas_con_NaN = []
+for column in data.columns:
+  if data[column].dtype == 'object':
+    if data[column].count() != data.shape[0]:
+      columnas_con_NaN.append(column)
+print(columnas_con_NaN)
+
+
+#ELIMINO AQUELLAS FILAS QUE TIENEN VALORES NA
+for columna in columnas_con_NaN:
+    data = data.dropna(subset=[columna])
+
+
+for columna in columnas_con_NaN:
+  if len(data[columna].unique()) > 2:
+    columnas_one_hot.append(columna)
+
+
+# ELIMINO AQUELLAS FILAS DONDE EN LAS VARIABLES NUMÉRICAS TENGAN 0
+columnas_numéricas = ['cap-diameter', 'stem-height','stem-width']
+for columna in columnas_numéricas:
+    data = data[data[columna] != 0.0]
+
+
+data_trabajado = data.select_dtypes(exclude=['object'])
+mostrar_data_actual(data_trabajado)
+
+
+data_one_hot = pd.get_dummies(data)
+mostrar_data_actual(data_one_hot)
+
+
+print(columnas_one_hot)
+
+for columna in columnas_one_hot:
+  data_filtrado = data.copy().loc[:,[columna,"class"]]
+  dummie = pd.get_dummies(data_filtrado, columns=[columna])
+  matriz_correlacion = dummie.corr()
+
+
+  plt.figure(figsize=(10, 8))
+  sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+  plt.title(f'Mapa de calor de correlación - {columna}')
+  plt.show()
+
+
+for feature in columnas_one_hot:
+    sns.countplot(x=feature, hue='class', data=data)
+    plt.title(f'Frecuencia de {feature} por clase')
+    plt.xlabel(feature)
+    plt.ylabel('Frecuencia')
+    plt.show()
+
+
+matriz_correlacion = data_one_hot.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+plt.title('Mapa de calor de correlación')
+plt.show()
+
+
+matriz_correlacion = data_cleaned.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+plt.title(f'Mapa de calor de correlación')
+plt.show()
