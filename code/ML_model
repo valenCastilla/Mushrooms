@@ -1,0 +1,171 @@
+#---------- ========== ---------- ========== ----------  MODELO ---------- ========== ---------- ========== ----------
+
+
+# FUNCIÓN DE EVALUACIÓN DE MODELOS
+def evaluación(y_test, y_pred):
+  cm = confusion_matrix(y_test, y_pred)
+  print("----- Matriz de Confusión -----", end='\n\n')
+  print(f'                | {"Pred. Positiva":^15} | {"Pred. Negativa":^15} |')
+  print(f'{"Real Positiva":^15} | {cm[0, 0]:^15} | {cm[0, 1]:^15} |')
+  print(f'{"Real Negativa":^15} | {cm[1, 0]:^15} | {cm[1, 1]:^15} |')
+  precision = precision_score(y_test, y_pred)
+  recall = recall_score(y_test, y_pred)
+  f1 = f1_score(y_test, y_pred)
+  print("\n----- Métricas de Evaluación -----", end='\n\n')
+  print(f"Precisión: {precision}")
+  print(f"Recall: {recall}")
+  print(f"F1-score: {f1}")
+  report = classification_report(y_test, y_pred)
+  print("\n----- Informe de Clasificación -----", end='\n\n')
+  print(report)
+
+
+X_num = data_trabajado.drop(["class"], axis = 1)
+y_num = data_trabajado['class']
+X_train, X_test, y_train, y_test = train_test_split(X_num, y_num , test_size=0.3, random_state=42)
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_trabajado.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+
+X = data_one_hot.drop(['class'], axis=1)
+y = data_one_hot['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.3, random_state=42)
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_one_hot.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+data_imp = ['stem-color']
+data_mix = data[data_imp]
+data_final_base = pd.concat([data_trabajado, data_mix] , axis=1)
+data_final = pd.get_dummies(data_final_base)
+mostrar_data_actual(data_final)
+
+
+
+X = data_final.drop(['class'], axis=1)
+y = data_final['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.3)
+clf = RandomForestClassifier()
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_final.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+
+X = data_final.drop(['class'], axis=1)
+y = data_final['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+param_grid = {
+    'n_estimators': [50, 100, 150],  # Default = 100
+    'max_depth': [3, 5, None],      # default = None
+    'min_samples_leaf': [1, 3],        # Default = 1
+    'min_samples_split': [2, 5]       # Default = 2
+}
+grid_search = GridSearchCV(estimator=RandomForestClassifier(random_state=42),
+                           param_grid=param_grid,
+                           cv=5,
+                           verbose=2,
+                           n_jobs=-1)
+grid_search.fit(X_train, y_train)
+print("Mejores hiperparámetros encontrados:", grid_search.best_params_)
+best_model = grid_search.best_estimator_
+print("\nParámetros del mejor modelo:\n", best_model.get_params())
+y_pred = best_model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("\nPrecisión en el conjunto de prueba:", accuracy)
+print("\nReporte de clasificación:\n", classification_report(y_test, y_pred))
+importances = best_model.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+
+
+
+#CURVA-ROC
+fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+roc_auc = auc(fpr, tpr)
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, color='blue', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('Tasa de Falsos Positivos')
+plt.ylabel('Tasa de Verdaderos Positivos')
+plt.title('Curva ROC')
+plt.legend(loc="lower right")
+plt.show()
+
+
+precision, recall, _ = precision_recall_curve(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+plt.plot(recall, precision, color='blue', lw=2)
+plt.xlabel('Exhaustividad')
+plt.ylabel('Precisión')
+plt.title('Curva Precision-Recall')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.grid(True)
+plt.show()
+
+
+
+X = data_final.drop(['class'], axis=1)
+y = data_final['class']
+X_train, X_test, y_train, y_test = train_test_split(X, y , test_size=0.3)
+clf = RandomForestClassifier(n_estimators = 100, max_depth = None, min_samples_leaf = 1, min_samples_split = 5)
+clf.fit(X_train, y_train)
+importances = clf.feature_importances_
+feature_names = X_train.columns
+feature_importances = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+print(feature_importances.head(10))
+y_pred = clf.predict(X_test)
+evaluación(y_test, y_pred)
+estimator = clf.estimators_[0]
+plt.figure(figsize=(20, 10))
+plot_tree(estimator, feature_names=data_final.columns, class_names=['0', '1'], filled=True, rounded=True)
+plt.show()
+
+
+
+df_pred = pd.DataFrame({'Real': y_test, 'Predicho': y_pred})
+count_classes = df_pred.groupby(['Real', 'Predicho']).size().unstack(fill_value=0)
+count_classes.plot(kind='bar', figsize=(10, 6))
+plt.title('Comparación de Predicciones Reales vs Predichas')
+plt.xlabel('Clase Verdadera')
+plt.ylabel('Número de Instancias')
+plt.xticks(rotation=0)
+plt.legend(title='Predicho', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.show()
